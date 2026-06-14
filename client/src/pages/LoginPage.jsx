@@ -29,13 +29,13 @@ export default function LoginPage() {
       
       login(token, userData);
       navigate('/');
+      // Do not set loading false on success since we are navigating away
     } catch (err) {
       if (err.response && err.response.data && err.response.data.error) {
         setError(err.response.data.error);
       } else {
         setError('Login failed. Please try again.');
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -91,10 +91,7 @@ export default function LoginPage() {
                 required
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (error) setError(null);
-                }}
+                onChange={(e) => setEmail(e.target.value)}
                 className="bg-white border border-brand-border rounded-xl px-4 py-3 w-full text-sm text-brand-dark placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all duration-200"
               />
             </div>
@@ -109,10 +106,7 @@ export default function LoginPage() {
                   required
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (error) setError(null);
-                  }}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="bg-white border border-brand-border rounded-xl px-4 py-3 w-full text-sm text-brand-dark placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all duration-200 pr-12"
                 />
                 <button

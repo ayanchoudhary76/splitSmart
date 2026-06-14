@@ -5,8 +5,8 @@ import AppLayout from './components/AppLayout'
 
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import DashboardPage from './pages/DashboardPage'
 
-const DashboardPage  = () => <div>Dashboard</div>
 const GroupPage      = () => <div>Group detail</div>
 const ImportPage     = () => <div>Import</div>
 

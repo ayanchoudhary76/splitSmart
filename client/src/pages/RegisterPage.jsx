@@ -43,6 +43,7 @@ export default function RegisterPage() {
       
       login(token, userData);
       navigate('/');
+      // Do not set loading false on success since we are navigating away
     } catch (err) {
       if (err.response && err.response.data) {
         if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
@@ -55,7 +56,6 @@ export default function RegisterPage() {
       } else {
         setError('Registration failed. Please try again.');
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -113,7 +113,6 @@ export default function RegisterPage() {
                 onChange={(e) => {
                   setName(e.target.value);
                   setFieldErrors({...fieldErrors, name: null});
-                  if (error) setError(null);
                 }}
                 className="bg-white border border-brand-border rounded-xl px-4 py-3 w-full text-sm text-brand-dark placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all duration-200"
               />
@@ -131,7 +130,6 @@ export default function RegisterPage() {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setFieldErrors({...fieldErrors, email: null});
-                  if (error) setError(null);
                 }}
                 className="bg-white border border-brand-border rounded-xl px-4 py-3 w-full text-sm text-brand-dark placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all duration-200"
               />
@@ -150,7 +148,6 @@ export default function RegisterPage() {
                   onChange={(e) => {
                     setPassword(e.target.value);
                     setFieldErrors({...fieldErrors, password: null});
-                    if (error) setError(null);
                   }}
                   className="bg-white border border-brand-border rounded-xl px-4 py-3 w-full text-sm text-brand-dark placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all duration-200 pr-12"
                 />
