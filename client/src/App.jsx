@@ -3,8 +3,9 @@ import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import AppLayout from './components/AppLayout'
 
-const LoginPage      = () => <div className="text-red-500">Login page</div>
-const RegisterPage   = () => <div>Register page</div>
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
+
 const DashboardPage  = () => <div>Dashboard</div>
 const GroupPage      = () => <div>Group detail</div>
 const ImportPage     = () => <div>Import</div>

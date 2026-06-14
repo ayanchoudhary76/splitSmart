@@ -17,7 +17,8 @@ export function AuthProvider({ children }) {
 
       try {
         const { data } = await apiClient.get('/auth/me');
-        setUser(data.user);
+        // The backend returns req.user directly
+        setUser(data);
       } catch (err) {
         localStorage.removeItem('token');
         setToken(null);
