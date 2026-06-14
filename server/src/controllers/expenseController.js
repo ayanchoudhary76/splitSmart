@@ -1,5 +1,6 @@
 const { db } = require('../config/db');
 const { calculateSplits } = require('../services/splitCalculator');
+const { getMembersOnDate } = require('./groupController');
 
 /**
  * POST /api/groups/:groupId/expenses
@@ -47,6 +48,32 @@ async function createExpense(req, res, next) {
       .first();
     if (!membership) {
       return res.status(403).json({ error: 'You are not an active member of this group' });
+    }
+
+    // ── Validate participant membership on expense date ─────────
+    // Participants with a user_id must have been active members
+    // on the expense date (joined_at <= date AND left_at > date OR null).
+    // Participants with only participant_name (no user_id) are external
+    // people (e.g. "Dev's friend Kabir") and are always allowed.
+    const namedParticipants = participants.filter(p => p.user_id != null);
+
+    if (namedParticipants.length > 0) {
+      const activeOnDate = await getMembersOnDate(groupId, date);
+      const activeMemberIds = new Set(activeOnDate.map(m => m.id));
+
+      const invalidParticipants = namedParticipants.filter(
+        p => !activeMemberIds.has(parseInt(p.user_id, 10))
+      );
+
+      if (invalidParticipants.length > 0) {
+        const names = invalidParticipants.map(p => p.participant_name || p.user_id);
+        return res.status(400).json({
+          error: 'Some participants were not active group members on the expense date',
+          invalid_participants: names,
+          expense_date: date,
+          hint: 'Check their joined_at and left_at dates, or use participant_name without user_id for external people'
+        });
+      }
     }
 
     // ── Compute amount_inr ────────────────────────────────────
