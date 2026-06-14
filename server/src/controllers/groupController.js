@@ -17,9 +17,10 @@ async function createGroup(req, res, next) {
         .insert({
           name: name.trim(),
           description: description || null,
-          created_by: req.user.id
+          created_by: req.user.id,
+          admin_user_id: req.user.id
         })
-        .returning(['id', 'name', 'description', 'created_at']);
+        .returning(['id', 'name', 'description', 'admin_user_id', 'created_at']);
 
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
 
@@ -120,6 +121,7 @@ async function getGroup(req, res, next) {
         id: group.id,
         name: group.name,
         description: group.description,
+        admin_user_id: group.admin_user_id,
         created_at: group.created_at
       },
       members: membersWithStatus
@@ -221,62 +223,134 @@ async function addMember(req, res, next) {
 /**
  * DELETE /api/groups/:id/members/:userId
  * Mark a member as departed with a supplied left_at date.
+ * Admin-aware: only admin can remove others, admin must transfer before leaving.
  */
 async function removeMember(req, res, next) {
   try {
     const groupId = req.params.id;
-    const targetUserId = parseInt(req.params.userId, 10);
-    const callerId = req.user.id;
+    const userId = req.params.userId;
     const { left_at } = req.body;
 
     // Validate left_at
     if (!left_at || !/^\d{4}-\d{2}-\d{2}$/.test(left_at)) {
-      return res.status(400).json({ error: 'left_at must be a valid YYYY-MM-DD date' });
-    }
-    const leftDate = new Date(left_at + 'T00:00:00Z');
-    if (isNaN(leftDate.getTime())) {
-      return res.status(400).json({ error: 'left_at is not a valid date' });
+      return res.status(400).json({ error: 'left_at must be YYYY-MM-DD' });
     }
 
-    // Verify caller is active member
-    const callerMembership = await db('group_members')
-      .where({ group_id: groupId, user_id: callerId })
+    const group = await db('groups').where({ id: groupId }).first();
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    // Find the active membership of the target user
+    const membership = await db('group_members')
+      .where({ group_id: groupId, user_id: userId })
       .whereNull('left_at')
       .first();
-
-    if (!callerMembership) {
-      return res.status(403).json({ error: 'You are not an active member of this group' });
+    if (!membership) {
+      return res.status(404).json({ error: 'Active membership not found' });
     }
 
-    // Find active membership for target user
-    const targetMembership = await db('group_members')
-      .where({ group_id: groupId, user_id: targetUserId })
-      .whereNull('left_at')
-      .first();
+    const isAdmin = group.admin_user_id === req.user.id;
+    const isSelf = parseInt(userId, 10) === req.user.id;
 
-    if (!targetMembership) {
-      return res.status(404).json({ error: 'Active membership not found for this user' });
+    // Non-admin trying to remove someone else
+    if (!isAdmin && !isSelf) {
+      return res.status(403)
+        .json({ error: 'Only the group admin can remove other members' });
     }
 
-    // Cannot remove yourself if you're the only active member
-    if (targetUserId === callerId) {
-      const activeCount = await db('group_members')
+    // Admin trying to remove themselves
+    if (isAdmin && isSelf) {
+      const otherActiveMembers = await db('group_members')
         .where({ group_id: groupId })
         .whereNull('left_at')
+        .whereNot({ user_id: req.user.id })
         .count('id as count')
         .first();
 
-      if (parseInt(activeCount.count, 10) <= 1) {
-        return res.status(400).json({ error: 'Cannot remove yourself — you are the only active member' });
+      const count = parseInt(otherActiveMembers.count, 10);
+
+      if (count > 0) {
+        return res.status(400).json({
+          error: 'Transfer admin rights to another member or delete the group before leaving',
+          action_required: 'transfer_or_delete'
+        });
       }
+      // count === 0 means they are the only member — allow departure
     }
 
-    // Set left_at
     await db('group_members')
-      .where({ id: targetMembership.id })
-      .update({ left_at: left_at });
+      .where({ group_id: groupId, user_id: userId })
+      .whereNull('left_at')
+      .update({ left_at });
 
     return res.status(200).json({ message: 'Member removed', left_at });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /api/groups/:id/admin
+ * Transfer admin rights to another active member.
+ */
+async function transferAdmin(req, res, next) {
+  try {
+    const groupId = req.params.id;
+    const { new_admin_user_id } = req.body;
+
+    const group = await db('groups').where({ id: groupId }).first();
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    // Verify caller is current admin
+    if (group.admin_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the current admin can transfer admin rights' });
+    }
+
+    // Verify new admin is an active member
+    const newAdminMembership = await db('group_members')
+      .where({ group_id: groupId, user_id: new_admin_user_id })
+      .whereNull('left_at')
+      .first();
+
+    if (!newAdminMembership) {
+      return res.status(400).json({ error: 'New admin must be an active group member' });
+    }
+
+    await db('groups')
+      .where({ id: groupId })
+      .update({ admin_user_id: new_admin_user_id });
+
+    return res.status(200).json({
+      message: 'Admin transferred',
+      new_admin: { user_id: new_admin_user_id }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/groups/:id
+ * Delete a group entirely. Requires admin and explicit confirm: true.
+ * CASCADE handles group_members, expenses, expense_splits, etc.
+ */
+async function deleteGroup(req, res, next) {
+  try {
+    const groupId = req.params.id;
+
+    const group = await db('groups').where({ id: groupId }).first();
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    if (group.admin_user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Only the group admin can delete the group' });
+    }
+
+    if (req.body.confirm !== true) {
+      return res.status(400).json({ error: 'Send confirm: true to delete' });
+    }
+
+    await db('groups').where({ id: groupId }).del();
+
+    return res.status(200).json({ message: 'Group deleted' });
   } catch (err) {
     next(err);
   }
@@ -308,5 +382,7 @@ module.exports = {
   getGroup,
   addMember,
   removeMember,
+  transferAdmin,
+  deleteGroup,
   getMembersOnDate
 };

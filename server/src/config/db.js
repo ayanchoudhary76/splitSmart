@@ -1,5 +1,8 @@
 const knex = require('knex');
-
+// Tell the pg driver to return DATE columns as plain strings, not Date objects
+// Without this, "2026-02-01" (IST) becomes "2026-01-31T18:30:00.000Z" after UTC conversion
+const { types } = require('pg');
+types.setTypeParser(1082, val => val); // 1082 = DATE type OID in PostgreSQL
 const db = knex({
   client: 'pg',
   connection: process.env.DATABASE_URL,
