@@ -4,6 +4,7 @@ const {
   previewImport,
   confirmImport,
   getImportSession,
+  getImportReport,
   uploadSingle,
 } = require('../controllers/importController');
 
@@ -19,5 +20,8 @@ router.post('/:groupId/confirm', confirmImport);
 
 // Inspect a past session + its anomalies
 router.get('/:groupId/sessions/:sessionId', getImportSession);
+
+// Human-readable audit report for the assignment evaluator
+router.get('/:groupId/sessions/:sessionId/report', getImportReport);
 
 module.exports = router;
