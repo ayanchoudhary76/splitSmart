@@ -3,8 +3,8 @@
 Built for the Spreetail SDE Internship assignment.
 
 ## Live Demo
-- App: [deployed URL — fill after deployment]
-- API: [Railway URL — fill after deployment]
+- App: https://split-smart-nine-rho.vercel.app
+- API: https://splitsmart-production-6c7b.up.railway.app
 
 ## Tech Stack
 | Layer | Technology |
