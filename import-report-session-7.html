@@ -1,0 +1,547 @@
+﻿<html>
+<head>
+  <meta charset="utf-8">
+  <title>Import Report — Session 7</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #F7F7FD; color: #1A1A2E; padding: 32px; }
+    .header { background: linear-gradient(135deg,#6C63FF,#FF6584); color: white; border-radius: 16px; padding: 24px 32px; margin-bottom: 24px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p  { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px; }
+    .stat { background: white; border-radius: 12px; padding: 16px; border: 1px solid #E2E2F0; text-align: center; }
+    .stat .num { font-size: 28px; font-weight: 700; }
+    .stat .lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .section-title { font-size: 14px; font-weight: 600; margin: 24px 0 12px; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; border: 1px solid #E2E2F0; font-size: 13px; }
+    th { background: #F0F0FA; padding: 10px 14px; text-align: left; font-weight: 600; color: #555; border-bottom: 1px solid #E2E2F0; }
+    td { padding: 10px 14px; border-bottom: 1px solid #F5F5FB; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; border-radius: 20px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
+    .imported      { background:#D1FAE5; color:#065F46; }
+    .flagged       { background:#FEF3C7; color:#92400E; }
+    .skipped       { background:#F3F4F6; color:#6B7280; }
+    .settlement    { background:#DBEAFE; color:#1E40AF; }
+    .review        { background:#FFEDD5; color:#9A3412; }
+    .mono { font-family: monospace; font-size: 11px; color: #888; }
+    .policies { background: white; border-radius: 12px; border: 1px solid #E2E2F0; padding: 20px; }
+    .policy-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #F5F5FB; font-size: 13px; }
+    .policy-row:last-child { border-bottom: none; }
+    .policy-key { font-family: monospace; font-size: 11px; color: #6C63FF; min-width: 200px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Import Report</h1>
+    <p>File: expenses_export.csv · Imported: 6/14/2026, 6:33:23 PM · USD Rate: ₹83.5000/USD</p>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="num">42</div>
+      <div class="lbl">Total Rows</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:#065F46">37</div>
+      <div class="lbl">Imported</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:#92400E">26</div>
+      <div class="lbl">Flagged</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:#6B7280">3</div>
+      <div class="lbl">Skipped</div>
+    </div>
+  </div>
+  <div class="section-title">Anomaly Log</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Row</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+        <tr>
+          <td class="mono">#4</td>
+          <td class="mono">unknown_payer</td>
+          <td>paid_by: "Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#4</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#5</td>
+          <td class="mono">unknown_payer</td>
+          <td>paid_by: "Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#5</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#6</td>
+          <td class="mono">comma_in_amount</td>
+          <td>Comma(s) removed from amount "1,200" — treated as thousands separator</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#8</td>
+          <td class="mono">name_mismatch</td>
+          <td>paid_by: "priya" matched to group member "Priya" (case differs)</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#9</td>
+          <td class="mono">excessive_decimal</td>
+          <td>899.995 rounded to 900 (more than 2 decimal places)</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#10</td>
+          <td class="mono">name_mismatch</td>
+          <td>paid_by: "Priya S" matched to group member "Priya"</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#12</td>
+          <td class="mono">missing_paid_by</td>
+          <td>paid_by field is blank</td>
+          <td><span class="badge skipped">skipped</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#14</td>
+          <td class="mono">percentage_sum_not_100</td>
+          <td>Percentages sum to 110%, not 100%</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#15</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"01/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-01</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#16</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"03/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-03</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#17</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"05/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-05</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#18</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"08/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-08</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#18</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#19</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"09/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-09</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#19</td>
+          <td class="mono">usd_amount</td>
+          <td>USD amount converted at ₹83.5/USD</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#19</td>
+          <td class="mono">unknown_payer</td>
+          <td>paid_by: "Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#19</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#20</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"10/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-10</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#20</td>
+          <td class="mono">usd_amount</td>
+          <td>USD amount converted at ₹83.5/USD</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#20</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#21</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"10/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-10</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#21</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#22</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"11/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-11</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#22</td>
+          <td class="mono">usd_amount</td>
+          <td>USD amount converted at ₹83.5/USD</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#22</td>
+          <td class="mono">unknown_payer</td>
+          <td>paid_by: "Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#22</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#22</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev's friend Kabir" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#23</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"11/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-11</td>
+          <td><span class="badge review">pending_user_review</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#23</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge review">pending_user_review</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#23</td>
+          <td class="mono">conflicting_entries</td>
+          <td>Same event logged with different amounts/payers. Row 23 and Row 24. Manual review required.</td>
+          <td><span class="badge review">pending_user_review</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#24</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"11/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-11</td>
+          <td><span class="badge review">pending_user_review</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#24</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge review">pending_user_review</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#24</td>
+          <td class="mono">conflicting_entries</td>
+          <td>Same event logged with different amounts/payers. Row 23 and Row 24. Manual review required.</td>
+          <td><span class="badge review">pending_user_review</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#25</td>
+          <td class="mono">negative_amount</td>
+          <td>Amount -30 is negative</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#25</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"12/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-12</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#25</td>
+          <td class="mono">usd_amount</td>
+          <td>USD amount converted at ₹83.5/USD</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#25</td>
+          <td class="mono">unknown_payer</td>
+          <td>paid_by: "Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#25</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#26</td>
+          <td class="mono">ambiguous_date</td>
+          <td>Month-name date "Mar 14" normalized to 2026-03-14 (assumed year 2026 if not specified)</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#26</td>
+          <td class="mono">name_mismatch</td>
+          <td>paid_by: "rohan" matched to group member "Rohan" (case differs)</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#26</td>
+          <td class="mono">unknown_participant</td>
+          <td>"Dev" is not a group member — will be recorded as external participant</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#27</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"15/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-15</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#27</td>
+          <td class="mono">missing_currency</td>
+          <td>No currency specified — defaulting to INR</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#28</td>
+          <td class="mono">whitespace_in_amount</td>
+          <td>Leading/trailing whitespace removed from amount " 1450 "</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#28</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"18/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-18</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#29</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"20/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-20</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#30</td>
+          <td class="mono">zero_amount</td>
+          <td>Amount is zero — this row will be skipped</td>
+          <td><span class="badge skipped">skipped</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#30</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"22/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-22</td>
+          <td><span class="badge skipped">skipped</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#31</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"25/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-25</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#31</td>
+          <td class="mono">percentage_sum_not_100</td>
+          <td>Percentages sum to 110%, not 100%</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#32</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"28/03/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-03-28</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#33</td>
+          <td class="mono">ambiguous_date</td>
+          <td>"04/05/2026" is ambiguous (DD/MM/YYYY or MM/DD/YYYY). Interpreted as DD/MM/YYYY → 2026-05-04</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#35</td>
+          <td class="mono">post_departure_member</td>
+          <td>Meera left on 2026-03-31 but is in split for 2026-04-02. Excluded and redistributed to active members.</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+        <tr>
+          <td class="mono">#41</td>
+          <td class="mono">conflicting_split_type</td>
+          <td>split_type is "equal" but split_details has numeric values — treating as share</td>
+          <td><span class="badge flagged">imported_with_flag</span></td>
+        </tr>
+      
+    </tbody>
+  </table>
+  <div class="section-title">Handling Policies</div>
+  <div class="policies">
+    
+      <div class="policy-row">
+        <span class="policy-key">unknown_payer</span>
+        <span>Imported with flag — paid_by name is not a group member. Recorded as external payer (paid_by_user_id = NULL). Debt to this person is tracked outside the group balance.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">unknown_participant</span>
+        <span>Imported with flag — a name in split_with is not a group member. Recorded as external participant (user_id = NULL in expense_splits). Share excluded from group balance calculations.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">comma_in_amount</span>
+        <span>Imported with flag — comma(s) removed and value treated as thousands separator (e.g. "1,200" → 1200). Original raw value preserved in original_data for audit.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">name_mismatch</span>
+        <span>Imported with flag — paid_by or split_with name matched a group member after case-insensitive or prefix matching. Resolved user_id stored; original name preserved in original_data.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">excessive_decimal</span>
+        <span>Imported with flag — amount had more than 2 decimal places and was rounded to 2dp (e.g. 899.995 → 900). Rounding details captured in description.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">missing_paid_by</span>
+        <span>Skipped — paid_by field is blank. Cannot attribute payment without knowing who paid.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">percentage_sum_not_100</span>
+        <span>Imported with flag — percentages summed to ≠100% (warning only, not a hard error per spec P8). Splits are recorded as-is; the group should manually reconcile the rounding difference.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">ambiguous_date</span>
+        <span>Imported with flag — date was not in ISO YYYY-MM-DD format (e.g. DD/MM/YYYY or "Mar 14"). Parsed with best-guess interpretation; original preserved in original_data.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">usd_amount</span>
+        <span>Imported with flag — currency was USD. Amount converted to INR using the session usd_rate. Both original USD amount and INR equivalent stored.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">conflicting_entries</span>
+        <span>Pending user review — same event logged with different amounts or payers on the same date. Keyword overlap detected after stopword removal. User must choose which row to import at confirm time.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">negative_amount</span>
+        <span>Imported with flag — negative amounts are treated as refunds and imported. They legitimately reduce the payer's net credit in the group balance.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">missing_currency</span>
+        <span>Imported with flag — currency field was blank; defaulted to INR.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">whitespace_in_amount</span>
+        <span>Imported with flag — leading/trailing whitespace stripped from amount. Possible data-entry error; flagged for awareness.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">zero_amount</span>
+        <span>Skipped — a ₹0 expense cannot be attributed or split meaningfully.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">post_departure_member</span>
+        <span>Imported with flag — a participant left the group before the expense date. That member was removed from the split and shares redistributed equally among active members.</span>
+      </div>
+    
+      <div class="policy-row">
+        <span class="policy-key">conflicting_split_type</span>
+        <span>Imported with flag — split_type was "equal" but split_details contained numeric values. Treated as unequal split using the provided amounts; conflicting_split_type flag surfaced.</span>
+      </div>
+    
+  </div>
+</body>
+</html>
