@@ -229,10 +229,11 @@ async function removeMember(req, res, next) {
   try {
     const groupId = req.params.id;
     const userId = req.params.userId;
-    const { left_at } = req.body;
+    // left_at: caller may supply a backdated date, or we default to today
+    const leftAt = req.body.left_at || new Date().toISOString().split('T')[0];
 
-    // Validate left_at
-    if (!left_at || !/^\d{4}-\d{2}-\d{2}$/.test(left_at)) {
+    // Validate format if explicitly supplied
+    if (req.body.left_at && !/^\d{4}-\d{2}-\d{2}$/.test(req.body.left_at)) {
       return res.status(400).json({ error: 'left_at must be YYYY-MM-DD' });
     }
 
@@ -280,9 +281,9 @@ async function removeMember(req, res, next) {
     await db('group_members')
       .where({ group_id: groupId, user_id: userId })
       .whereNull('left_at')
-      .update({ left_at });
+      .update({ left_at: leftAt });
 
-    return res.status(200).json({ message: 'Member removed', left_at });
+    return res.status(200).json({ message: 'Member removed', left_at: leftAt });
   } catch (err) {
     next(err);
   }

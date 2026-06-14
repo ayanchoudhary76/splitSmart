@@ -27,8 +27,18 @@ async function queryTotalPaid(groupId) {
 
 /**
  * QUERY B — Total owed per member from expense_splits, date-range-filtered.
- * Even if Meera is listed in a split for an April expense,
- * e.date < gm.left_at (2026-03-31) excludes it from her total_owed.
+ *
+ * Uses a pre-joined (expense_splits INNER JOIN expenses) inside a LEFT JOIN
+ * to avoid the chained-LEFT-JOIN leak: when es is LEFT JOINed first and e is
+ * LEFT JOINed second, a failed e match leaves es.share_amount non-null, which
+ * inflates the SUM. Pre-joining ensures both es and e are null when the
+ * expense doesn't qualify.
+ *
+ * Excludes:
+ *  - settlement expenses (is_settlement = TRUE)
+ *  - external-payer expenses (paid_by_user_id IS NULL) — those debts are owed
+ *    to the external person directly, not within the group balance
+ *  - expenses outside the member's membership window
  */
 async function queryTotalOwed(groupId) {
   const rows = await db.raw(`
@@ -38,12 +48,16 @@ async function queryTotalOwed(groupId) {
       COALESCE(SUM(es.share_amount), 0) AS total_owed
     FROM group_members gm
     JOIN users u ON u.id = gm.user_id
-    LEFT JOIN expense_splits es ON es.user_id = gm.user_id
-    LEFT JOIN expenses e
-      ON  e.id            = es.expense_id
-      AND e.group_id      = gm.group_id
-      AND e.is_settlement = FALSE
-      AND e.date         >= gm.joined_at
+    LEFT JOIN (
+      expense_splits es
+      INNER JOIN expenses e
+        ON  e.id              = es.expense_id
+        AND e.is_settlement   = FALSE
+        AND e.paid_by_user_id IS NOT NULL
+    )
+      ON  es.user_id  = gm.user_id
+      AND e.group_id  = gm.group_id
+      AND e.date     >= gm.joined_at
       AND (gm.left_at IS NULL OR e.date < gm.left_at)
     WHERE gm.group_id = :groupId
     GROUP BY u.id, u.name

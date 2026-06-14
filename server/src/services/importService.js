@@ -201,51 +201,73 @@ function detectSettlement(description) {
 // E. parseSplitParticipants
 // ─────────────────────────────────────────────────────────────
 function parseSplitParticipants(splitWith, splitDetails, splitType, groupMembers, amountInr, exchangeRate) {
-  const anomalies = [];
+  const names       = (splitWith    || '').split(';').map(s => s.trim()).filter(Boolean);
+  const detailParts = (splitDetails || '').split(';').map(s => s.trim()).filter(Boolean);
 
-  if (!splitWith || !splitWith.trim()) {
-    return { participants: [], anomalies: [{ type: 'missing_split_with', description: 'split_with is empty' }], splits: [] };
+  let participants = [];
+  const anomalies  = [];
+  let effectiveSplitType = splitType;
+
+  // Detect conflicting_split_type FIRST:
+  // split_type = 'equal' but split_details has numeric values (e.g. Row 42 furniture)
+  if (splitType === 'equal' && detailParts.length > 0 &&
+      detailParts.some(p => /\d/.test(p))) {
+    anomalies.push({
+      type: 'conflicting_split_type',
+      description: 'split_type is "equal" but split_details has numeric values — treating as share'
+    });
+    effectiveSplitType = 'share';
   }
 
-  const names   = splitWith.split(',').map(n => n.trim()).filter(Boolean);
-  const details = splitDetails ? splitDetails.split(',').map(d => d.trim()).filter(Boolean) : [];
-
-  const participants = names.map((name, i) => {
-    const resolved = normalizeName(name, groupMembers);
-
-    if (resolved.anomaly === 'name_mismatch') {
-      anomalies.push({ type: 'name_mismatch', description: resolved.anomalyDesc });
-    } else if (resolved.anomaly === 'unknown_participant') {
-      anomalies.push({ type: 'unknown_participant', description: resolved.anomalyDesc });
+  if (!detailParts.length || effectiveSplitType === 'equal') {
+    // Equal split: participants come from split_with
+    for (const name of names) {
+      const norm = normalizeName(name, groupMembers);
+      if (norm.anomaly) anomalies.push({
+        type: norm.anomaly,
+        description: norm.anomalyDesc || `'${name}' matched to '${norm.participant_name}'`
+      });
+      participants.push({ user_id: norm.user_id, participant_name: norm.participant_name });
     }
+  } else {
+    // Non-equal: parse "Name value[%]" pairs from split_details.
+    // Regex captures everything before the last whitespace+number+optional-%.
+    // e.g. "Aisha 30%"           -> name="Aisha",              val=30
+    //      "Rohan 700"            -> name="Rohan",              val=700
+    //      "Dev's friend Kabir 1" -> name="Dev's friend Kabir", val=1
+    for (const part of detailParts) {
+      const match = part.match(/^(.+?)\s+([\d.]+)(%?)$/);
+      if (!match) continue;
 
-    const base = { user_id: resolved.user_id, participant_name: resolved.participant_name };
+      const rawName  = match[1].trim();
+      const rawValue = parseFloat(match[2]);
 
-    switch (splitType) {
-      case 'unequal':
-        return { ...base, amount: parseFloat(details[i]) || 0 };
-      case 'percentage':
-        return { ...base, percentage: parseFloat((details[i] || '').replace('%', '')) || 0 };
-      case 'share':
-        return { ...base, shares: parseFloat(details[i]) || 1 };
-      default: // equal
-        return base;
+      const norm = normalizeName(rawName, groupMembers);
+      if (norm.anomaly) anomalies.push({
+        type: norm.anomaly,
+        description: norm.anomalyDesc || `'${rawName}' -> '${norm.participant_name}'`
+      });
+
+      if (effectiveSplitType === 'percentage') {
+        participants.push({ user_id: norm.user_id, participant_name: norm.participant_name,
+                            percentage: rawValue });
+      } else if (effectiveSplitType === 'unequal') {
+        participants.push({ user_id: norm.user_id, participant_name: norm.participant_name,
+                            amount: rawValue });
+      } else if (effectiveSplitType === 'share') {
+        participants.push({ user_id: norm.user_id, participant_name: norm.participant_name,
+                            shares: rawValue });
+      }
     }
-  });
-
-  // Run calculateSplits to validate and collect its warnings
-  let splits = [];
-  try {
-    const result = calculateSplits(splitType, amountInr, participants, { exchangeRate });
-    splits = result.splits;
-    for (const w of result.warnings) {
-      anomalies.push({ type: 'split_warning', description: w });
-    }
-  } catch (err) {
-    anomalies.push({ type: 'split_error', description: `calculateSplits error: ${err.message}` });
   }
 
-  return { participants, anomalies, splits };
+  // Run calculateSplits to validate math and produce share_amount values
+  const result = calculateSplits(effectiveSplitType, amountInr, participants, { exchangeRate });
+  for (const w of result.warnings) {
+    anomalies.push({ type: 'percentage_sum_not_100', description: w });
+  }
+
+  return { participants, anomalies, splits: result.splits };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -255,7 +277,16 @@ function analyzeRow(row, rowNumber, groupMembers, usdRate) {
   const anomalies = [];
   const normalized = {};
 
-  // a. Amount
+  // Manually trim all text fields (trim:false in csv-parse so raw amount is preserved).
+  // Do NOT trim row.amount or row.date — pass them raw to their normalizers.
+  const trimmedDescription  = (row.description   || '').trim();
+  const trimmedCurrency     = (row.currency      || '').trim();
+  const trimmedSplitType    = (row.split_type    || '').trim();
+  const trimmedSplitWith    = (row.split_with    || '').trim();
+  const trimmedSplitDetails = (row.split_details || '').trim();
+  const trimmedPaidBy       = (row.paid_by       || '').trim();
+
+  // a. Amount — pass raw (untrimmed) so whitespace_in_amount is detected
   const { value: amountValue, anomalies: amtAnomalies } = normalizeAmount(row.amount);
   normalized.amount = amountValue;
   anomalies.push(...amtAnomalies);
@@ -266,7 +297,7 @@ function analyzeRow(row, rowNumber, groupMembers, usdRate) {
   anomalies.push(...dateAnomalies);
 
   // c. Currency (default INR)
-  let currency = (row.currency || '').trim().toUpperCase();
+  let currency = trimmedCurrency.toUpperCase();
   if (!currency) {
     currency = 'INR';
     anomalies.push({ type: 'missing_currency', description: 'No currency specified — defaulting to INR' });
@@ -284,60 +315,98 @@ function analyzeRow(row, rowNumber, groupMembers, usdRate) {
   normalized.amount_inr = amountInr;
 
   // e. paid_by
-  const paidByRaw = (row.paid_by || '').trim();
-  const paidByResolved = normalizeName(paidByRaw, groupMembers);
-  if (paidByResolved.anomaly === 'name_mismatch') {
-    anomalies.push({ type: 'name_mismatch', description: `paid_by: ${paidByResolved.anomalyDesc}` });
-  } else if (paidByResolved.anomaly === 'unknown_participant') {
-    anomalies.push({ type: 'unknown_payer', description: `paid_by: ${paidByResolved.anomalyDesc}` });
+  // FIX 2: blank paid_by = hard skip (missing_paid_by); named external = flag (unknown_payer)
+  if (!trimmedPaidBy) {
+    anomalies.push({ type: 'missing_paid_by', description: 'paid_by field is blank' });
+    normalized.paid_by_user_id = null;
+    normalized.paid_by_name    = '';
+  } else {
+    const paidByResolved = normalizeName(trimmedPaidBy, groupMembers);
+    if (paidByResolved.anomaly === 'name_mismatch') {
+      anomalies.push({ type: 'name_mismatch', description: `paid_by: ${paidByResolved.anomalyDesc}` });
+    } else if (paidByResolved.anomaly === 'unknown_participant') {
+      // Named external payer — valid, paid_by_user_id stays null, imported with flag
+      anomalies.push({ type: 'unknown_payer', description: `paid_by: ${paidByResolved.anomalyDesc || `"${trimmedPaidBy}" is not a group member — external payer`}` });
+    }
+    normalized.paid_by_user_id = paidByResolved.user_id;
+    normalized.paid_by_name    = paidByResolved.participant_name;
   }
-  normalized.paid_by_user_id   = paidByResolved.user_id;
-  normalized.paid_by_name      = paidByResolved.participant_name;
 
   // f. Settlement detection
   const isSettlement = detectSettlement(row.description);
   normalized.is_settlement = isSettlement;
 
-  // g. Split type + participants
-  const rawSplitType = (row.split_type || 'equal').trim().toLowerCase();
-  let splitType = rawSplitType;
-  normalized.description = (row.description || '').trim();
-
-  // h. Conflict: split_type='equal' but split_details has numeric values → treat as 'share'
-  const splitDetailsRaw = (row.split_details || '').trim();
-  if (splitType === 'equal' && splitDetailsRaw && /\d/.test(splitDetailsRaw.replace(/%/g, ''))) {
-    anomalies.push({
-      type: 'conflicting_split_type',
-      description: `split_type is "equal" but split_details contains numeric values "${splitDetailsRaw}". Treating as "share" split.`
-    });
-    splitType = 'share';
+  // For settlements, resolve the recipient from split_with (the person being paid TO).
+  // e.g. "Rohan paid Aisha back" → split_with="Aisha" → to_user_id = Aisha's id.
+  // This is required because the settlements table has to_user_id NOT NULL.
+  let settlementToUserId = null;
+  let settlementToName   = null;
+  if (isSettlement && trimmedSplitWith) {
+    const recipientRaw = trimmedSplitWith.split(';')[0].trim();
+    if (recipientRaw) {
+      const rec = normalizeName(recipientRaw, groupMembers);
+      settlementToUserId = rec.user_id;
+      settlementToName   = rec.participant_name;
+      // Don't push an anomaly here — unknown recipient will surface as a skip at commit time
+    }
   }
+  normalized.to_user_id = settlementToUserId;
+  normalized.to_name    = settlementToName;
+
+  // g. Split type + participants (use manually-trimmed fields from top of function)
+  const splitType = trimmedSplitType.toLowerCase() || 'equal';
+  normalized.description = trimmedDescription;
   normalized.split_type = splitType;
+
+  // h. split_details raw (semicolon-delimited; parseSplitParticipants handles
+  //    the conflicting_split_type detection internally)
+  const splitDetailsRaw = trimmedSplitDetails;
 
   let participants = [];
   let proposedSplits = [];
 
   if (!isSettlement && amountInr != null) {
     const splitResult = parseSplitParticipants(
-      row.split_with, splitDetailsRaw, splitType, groupMembers, amountInr, exchangeRate
+      trimmedSplitWith, splitDetailsRaw, splitType, groupMembers, amountInr, exchangeRate
     );
     anomalies.push(...splitResult.anomalies);
-    participants    = splitResult.participants;
-    proposedSplits  = splitResult.splits;
+    participants   = splitResult.participants;
+    proposedSplits = splitResult.splits;
 
-    // i. Post-departure member check
+    // i. Post-departure member check — log anomaly AND rebuild splits without departed members
     if (dateValue) {
       participants.forEach(p => {
-        if (p.user_id == null) return;
+        if (p.user_id == null) return;  // external participant — always keep
         const member = groupMembers.find(m => m.id === p.user_id);
         if (member?.left_at && dateValue > member.left_at) {
           anomalies.push({
             type: 'post_departure_member',
-            description: `${member.name} left on ${member.left_at} but is in split for ${dateValue}. Policy: exclude and redistribute to active members on that date.`,
+            description: `${member.name} left on ${member.left_at} but is in split for ${dateValue}. Excluded and redistributed to active members.`,
             user_id: member.id
           });
         }
       });
+
+      // FIX 4: rebuild splits with only active participants
+      const activeParticipants = participants.filter(p => {
+        if (!p.user_id) return true;  // external — keep
+        const member = groupMembers.find(m => m.id === p.user_id);
+        if (!member || !member.left_at) return true;   // no departure date — active
+        return dateValue <= member.left_at;            // keep if expense is within membership
+      });
+
+      if (activeParticipants.length !== participants.length && activeParticipants.length > 0) {
+        // Re-run calculateSplits with only the active subset.
+        // For equal splits, strip any per-person field so it's treated as plain equal.
+        // For percentage/share/unequal keep the values as-is (already filtered).
+        try {
+          const recalc = calculateSplits(splitType, amountInr, activeParticipants, { exchangeRate });
+          proposedSplits = recalc.splits;
+          participants   = activeParticipants;  // expose trimmed list in proposedData
+        } catch (_) {
+          // If recalc fails (e.g. no participants left), keep original splits
+        }
+      }
     }
   }
 
@@ -358,10 +427,17 @@ function analyzeRow(row, rowNumber, groupMembers, usdRate) {
   } else if (anomalies.length === 0) {
     proposedAction = 'imported';
   } else {
-    // Minor anomalies that don't block import
-    const MINOR = new Set(['whitespace_in_amount', 'comma_in_amount', 'excessive_decimal',
-      'missing_currency', 'name_mismatch', 'unknown_participant', 'usd_amount',
-      'ambiguous_date', 'post_departure_member', 'split_warning', 'conflicting_split_type']);
+    // FIX 1 & 2: expanded MINOR set — these anomalies flag but never skip.
+    // percentage_sum_not_100 = warning, not error (spec: "imported with flag").
+    // negative_amount = refund — valid transaction.
+    // unknown_payer = named external payer — paid_by_user_id nullable by schema.
+    // missing_paid_by = blank paid_by field — the only payer anomaly that blocks.
+    const MINOR = new Set([
+      'whitespace_in_amount', 'comma_in_amount', 'excessive_decimal',
+      'missing_currency', 'name_mismatch', 'unknown_participant', 'unknown_payer',
+      'usd_amount', 'ambiguous_date', 'post_departure_member', 'split_warning',
+      'conflicting_split_type', 'percentage_sum_not_100', 'negative_amount',
+    ]);
     const hasBlocker = [...types].some(t => !MINOR.has(t));
     proposedAction = hasBlocker ? 'skipped' : 'imported_with_flag';
   }
@@ -372,13 +448,17 @@ function analyzeRow(row, rowNumber, groupMembers, usdRate) {
     normalized,
     anomalies,
     proposedAction,
-    proposedData: proposedAction !== 'skipped' && proposedAction !== 'pending_user_review' ? {
+    // Always populate proposedData — even for pending_user_review rows.
+    // detectConflicts sets proposedAction but must NOT erase proposedData;
+    // commitImport needs it when the user overrides the action at confirm time.
+    proposedData: proposedAction !== 'skipped' ? {
       description:      normalized.description,
       amount:           normalized.amount,
       currency:         normalized.currency,
       exchange_rate:    normalized.exchange_rate,
       amount_inr:       normalized.amount_inr,
       paid_by_user_id:  normalized.paid_by_user_id,
+      to_user_id:       normalized.to_user_id,   // settlement recipient
       split_type:       normalized.split_type,
       date:             normalized.date,
       participants,
@@ -421,24 +501,36 @@ function detectDuplicates(analyzedRows) {
 // ─────────────────────────────────────────────────────────────
 // H. detectConflicts
 // ─────────────────────────────────────────────────────────────
+
+// FIX 3: keyword-overlap similarity — catches "Dinner at Thalassa" vs "Thalassa dinner".
+// Strips stopwords, matches if any meaningful word is shared.
+function descriptionsOverlap(d1, d2) {
+  const stopwords = new Set(['at', 'the', 'a', 'in', 'for', 'and', 'of', 'to', 'from']);
+  const words1 = new Set(
+    d1.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopwords.has(w))
+  );
+  const words2 = d2.toLowerCase().split(/\s+/).filter(w => w.length > 2 && !stopwords.has(w));
+  return words2.some(w => words1.has(w));
+}
+
 function detectConflicts(analyzedRows) {
   for (let i = 0; i < analyzedRows.length; i++) {
     const ri = analyzedRows[i];
     if (ri.proposedAction === 'skipped') continue;
-    const di = (ri.normalized.description || '').toLowerCase().trim();
+    const di = (ri.normalized.description || '').trim();
     const dateI = ri.normalized.date;
 
     for (let j = i + 1; j < analyzedRows.length; j++) {
       const rj = analyzedRows[j];
       if (rj.proposedAction === 'skipped') continue;
-      const dj = (rj.normalized.description || '').toLowerCase().trim();
+      const dj = (rj.normalized.description || '').trim();
       const dateJ = rj.normalized.date;
 
-      // Same date, overlapping description, different amount or payer
-      const sameDate = dateI && dateJ && dateI === dateJ;
-      const descOverlap = di && dj && (di.includes(dj) || dj.includes(di));
-      const different = ri.normalized.amount !== rj.normalized.amount ||
-                        ri.normalized.paid_by_user_id !== rj.normalized.paid_by_user_id;
+      // Same date + keyword overlap + different amount or payer
+      const sameDate    = dateI && dateJ && dateI === dateJ;
+      const descOverlap = di && dj && descriptionsOverlap(di, dj);
+      const different   = ri.normalized.amount !== rj.normalized.amount ||
+                          ri.normalized.paid_by_user_id !== rj.normalized.paid_by_user_id;
 
       if (sameDate && descOverlap && different) {
         const conflictNote = {
@@ -449,8 +541,8 @@ function detectConflicts(analyzedRows) {
         rj.anomalies.push(conflictNote);
         ri.proposedAction = 'pending_user_review';
         rj.proposedAction = 'pending_user_review';
-        ri.proposedData = null;
-        rj.proposedData = null;
+        // Do NOT null proposedData — commitImport needs it if the user overrides the action.
+        // The frontend uses proposedAction === 'pending_user_review' as the "needs review" signal.
       }
     }
   }
@@ -464,10 +556,11 @@ async function buildPreview(csvBuffer, groupId, usdRate, userId, filename = 'upl
   let rawRows;
   try {
     rawRows = parse(csvBuffer, {
-      columns:           true,
-      skip_empty_lines:  true,
-      trim:              true,
-      bom:               true,
+      columns:             true,
+      skip_empty_lines:    true,
+      trim:                false,   // keep raw whitespace so normalizeAmount can detect it
+      bom:                 true,
+      relax_column_count:  true,
     });
   } catch (err) {
     throw new Error(`CSV parse error: ${err.message}`);
@@ -509,10 +602,11 @@ async function buildPreview(csvBuffer, groupId, usdRate, userId, filename = 'upl
     for (const a of ar.anomalies) {
       anomalyRows.push({
         import_session_id: session.id,
-        row_number:        ar.rowNumber,
+        csv_row_number:    ar.rowNumber,
         anomaly_type:      a.type,
         description:       a.description,
-        proposed_action:   ar.proposedAction,
+        original_data:     JSON.stringify(a.originalRow || ar.original || {}),
+        action_taken:      ar.proposedAction,
       });
     }
   }
@@ -593,12 +687,21 @@ async function commitImport(sessionId, userDecisions, groupId, userId) {
 
     try {
       if (finalAction === 'imported_as_settlement') {
-        // INSERT into settlements
+        // INSERT into settlements.
+        // to_user_id is resolved from split_with during analyzeRow.
+        // The settlements table requires to_user_id NOT NULL — skip if unknown.
+        const toUserId = pd.to_user_id;
+        if (!toUserId) {
+          skipped++;
+          importReport.push({ rowNumber: ar.rowNumber, action: 'skipped',
+            reason: 'settlement_recipient_unknown — add recipient name to split_with column' });
+          continue;
+        }
         const [settlement] = await db('settlements')
           .insert({
             group_id:     groupId,
             from_user_id: pd.paid_by_user_id,
-            to_user_id:   null, // settlements imported from CSV often don't have to_user_id
+            to_user_id:   toUserId,
             amount:       pd.amount_inr ?? pd.amount,
             date:         pd.date,
             notes:        `Imported from CSV row ${ar.rowNumber}: ${pd.description}`,
