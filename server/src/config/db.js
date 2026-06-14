@@ -3,9 +3,13 @@ const knex = require('knex');
 // Without this, "2026-02-01" (IST) becomes "2026-01-31T18:30:00.000Z" after UTC conversion
 const { types } = require('pg');
 types.setTypeParser(1082, val => val); // 1082 = DATE type OID in PostgreSQL
+const isProduction = process.env.NODE_ENV === 'production';
+
 const db = knex({
   client: 'pg',
-  connection: process.env.DATABASE_URL,
+  connection: isProduction
+    ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
+    : process.env.DATABASE_URL,
   pool: { min: 2, max: 10 }
 });
 
