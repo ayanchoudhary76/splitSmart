@@ -101,13 +101,14 @@ export default function ImportPage() {
 
   const handleDownloadReport = async () => {
     try {
-      const res = await importApi.report(id, sessionId);
-      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' });
+      const response = await importApi.report(id, sessionId);
+      const blob = new Blob([response.data], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `import-report-${sessionId}.json`;
+      a.download = `import-report-session-${sessionId}.html`;
       a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download report', err);
     }

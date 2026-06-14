@@ -706,6 +706,7 @@ async function commitImport(sessionId, userDecisions, groupId, userId) {
             date:         pd.date,
             notes:        `Imported from CSV row ${ar.rowNumber}: ${pd.description}`,
             created_by:   userId,
+            import_session_id: sessionId,
           })
           .returning('id');
         settlements++;

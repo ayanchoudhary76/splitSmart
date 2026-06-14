@@ -6,6 +6,8 @@ const {
   getImportSession,
   getImportReport,
   uploadSingle,
+  rollbackImport,
+  listSessions,
 } = require('../controllers/importController');
 
 const router = express.Router();
@@ -23,5 +25,8 @@ router.get('/:groupId/sessions/:sessionId', getImportSession);
 
 // Human-readable audit report for the assignment evaluator
 router.get('/:groupId/sessions/:sessionId/report', getImportReport);
+
+router.delete('/:groupId/sessions/:sessionId', rollbackImport);
+router.get('/:groupId/sessions', listSessions);
 
 module.exports = router;

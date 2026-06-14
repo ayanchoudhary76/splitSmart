@@ -236,8 +236,8 @@ async function getImportReport(req, res, next) {
     // 5. Build clean session summary (omit heavy preview_data blob)
     const { preview_data: _omit, ...sessionMeta } = session;
 
-    return res.status(200).json({
-      session: {
+    const html = generateReportHTML(
+      {
         id:            sessionMeta.id,
         filename:      sessionMeta.filename,
         status:        sessionMeta.status,
@@ -249,13 +249,174 @@ async function getImportReport(req, res, next) {
         created_at:    sessionMeta.created_at,
         completed_at:  sessionMeta.completed_at,
       },
-      anomaly_count: anomalies.length,
       anomalies,
-      policies,
+      policies
+    );
+
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Content-Disposition', `attachment; filename="import-report-session-${sessionId}.html"`);
+    
+    return res.send(html);
+  } catch (err) {
+    next(err);
+  }
+}
+
+function getBadgeClass(action) {
+  switch (action) {
+    case 'imported':               return 'imported';
+    case 'imported_with_flag':     return 'flagged';
+    case 'imported_as_settlement': return 'settlement';
+    case 'skipped':                return 'skipped';
+    case 'pending_user_review':    return 'review';
+    default:                       return '';
+  }
+}
+
+function generateReportHTML(session, anomalies, policies) {
+  const formattedDate = session.completed_at ? new Date(session.completed_at).toLocaleString() : 'N/A';
+  return `<html>
+<head>
+  <meta charset="utf-8">
+  <title>Import Report — Session ${session.id}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #F7F7FD; color: #1A1A2E; padding: 32px; }
+    .header { background: linear-gradient(135deg,#6C63FF,#FF6584); color: white; border-radius: 16px; padding: 24px 32px; margin-bottom: 24px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header p  { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+    .stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px; }
+    .stat { background: white; border-radius: 12px; padding: 16px; border: 1px solid #E2E2F0; text-align: center; }
+    .stat .num { font-size: 28px; font-weight: 700; }
+    .stat .lbl { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+    .section-title { font-size: 14px; font-weight: 600; margin: 24px 0 12px; color: #555; text-transform: uppercase; letter-spacing: 0.05em; }
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; border: 1px solid #E2E2F0; font-size: 13px; }
+    th { background: #F0F0FA; padding: 10px 14px; text-align: left; font-weight: 600; color: #555; border-bottom: 1px solid #E2E2F0; }
+    td { padding: 10px 14px; border-bottom: 1px solid #F5F5FB; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; border-radius: 20px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
+    .imported      { background:#D1FAE5; color:#065F46; }
+    .flagged       { background:#FEF3C7; color:#92400E; }
+    .skipped       { background:#F3F4F6; color:#6B7280; }
+    .settlement    { background:#DBEAFE; color:#1E40AF; }
+    .review        { background:#FFEDD5; color:#9A3412; }
+    .mono { font-family: monospace; font-size: 11px; color: #888; }
+    .policies { background: white; border-radius: 12px; border: 1px solid #E2E2F0; padding: 20px; }
+    .policy-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid #F5F5FB; font-size: 13px; }
+    .policy-row:last-child { border-bottom: none; }
+    .policy-key { font-family: monospace; font-size: 11px; color: #6C63FF; min-width: 200px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📊 Import Report</h1>
+    <p>File: ${session.filename} · Imported: ${formattedDate} · USD Rate: ₹${session.usd_rate_used}/USD</p>
+  </div>
+  <div class="stats">
+    <div class="stat">
+      <div class="num">${session.total_rows}</div>
+      <div class="lbl">Total Rows</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:#065F46">${session.imported_rows || 0}</div>
+      <div class="lbl">Imported</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:#92400E">${session.flagged_rows || 0}</div>
+      <div class="lbl">Flagged</div>
+    </div>
+    <div class="stat">
+      <div class="num" style="color:#6B7280">${session.skipped_rows || 0}</div>
+      <div class="lbl">Skipped</div>
+    </div>
+  </div>
+  <div class="section-title">Anomaly Log</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Row</th>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${anomalies.map(a => `
+        <tr>
+          <td class="mono">#${a.csv_row_number}</td>
+          <td class="mono">${a.anomaly_type}</td>
+          <td>${a.description}</td>
+          <td><span class="badge ${getBadgeClass(a.action_taken)}">${a.action_taken}</span></td>
+        </tr>
+      `).join('')}
+    </tbody>
+  </table>
+  <div class="section-title">Handling Policies</div>
+  <div class="policies">
+    ${Object.entries(policies).map(([key, val]) => `
+      <div class="policy-row">
+        <span class="policy-key">${key}</span>
+        <span>${val}</span>
+      </div>
+    `).join('')}
+  </div>
+</body>
+</html>`;
+}
+
+async function rollbackImport(req, res, next) {
+  try {
+    const { groupId, sessionId } = req.params;
+
+    const session = await db('import_sessions')
+      .where({ id: sessionId, group_id: groupId })
+      .first();
+
+    if (!session) {
+      return res.status(404).json({ error: 'Import session not found' });
+    }
+    if (session.status !== 'completed') {
+      return res.status(400).json({ error: 'Can only rollback completed imports' });
+    }
+
+    const result = await db.transaction(async (trx) => {
+      const deletedExpenses = await trx('expenses')
+        .where({ import_session_id: sessionId })
+        .del();
+
+      const deletedSettlements = await trx('settlements')
+        .where({ import_session_id: sessionId })
+        .del();
+
+      await trx('import_sessions')
+        .where({ id: sessionId })
+        .update({
+          status: 'rolled_back',
+          completed_at: new Date().toISOString()
+        });
+
+      return { expenses: deletedExpenses, settlements: deletedSettlements };
+    });
+
+    return res.status(200).json({
+      message: 'Import rolled back successfully',
+      deleted: result
     });
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { previewImport, confirmImport, getImportSession, getImportReport, uploadSingle };
+async function listSessions(req, res, next) {
+  try {
+    const { groupId } = req.params;
+    const sessions = await db('import_sessions')
+      .where({ group_id: groupId })
+      .orderBy('created_at', 'desc');
+    return res.status(200).json({ sessions });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { previewImport, confirmImport, getImportSession, getImportReport, uploadSingle, rollbackImport, listSessions };
