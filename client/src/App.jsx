@@ -6,8 +6,8 @@ import AppLayout from './components/AppLayout'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import GroupPage from './pages/GroupPage'
 
-const GroupPage      = () => <div>Group detail</div>
 const ImportPage     = () => <div>Import</div>
 
 export default function App() {
