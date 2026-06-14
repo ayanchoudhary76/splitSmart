@@ -1,4 +1,19 @@
-# Spreetail Expenses — Scope & Decision Log
+# SCOPE.md — Anomaly Log + Database Schema
+
+## Database Schema
+
+### Tables (6 migrations + 2 patches)
+users, groups, group_members, expenses, expense_splits, 
+settlements, import_sessions, import_anomalies
+
+### Key design choices
+- group_members.joined_at / left_at: membership date tracking
+- expenses.amount_inr: stored (not computed) for historical accuracy
+- expenses.exchange_rate: rate at import time, preserved forever
+- expense_splits.user_id nullable: allows external participants
+- import_sessions.usd_rate_used: full auditability of USD conversion
+- import_sessions.preview_data: stores preview for confirm phase
+- settlements.import_session_id: enables rollback of imported settlements
 
 ## Import Engine (P8) — Anomaly Handling Policies
 
