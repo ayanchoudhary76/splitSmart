@@ -1,0 +1,5 @@
+-- Balance calculation query
+-- Returns: user_id, user_name, total_paid, total_owed, net_balance
+-- net_balance > 0 means they are owed money
+-- net_balance < 0 means they owe money
+-- TODO: fill in P6
